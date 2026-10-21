@@ -31,6 +31,36 @@ describe('matchProject', () => {
     expect(result).toBeUndefined();
   });
 
+  it('prefers the most specific nested project regardless of registration order', () => {
+    const parent = project({ name: 'team', workingDirectory: '/repos/team' });
+    const nested = project({ name: 'app', workingDirectory: '/repos/team/app' });
+    for (const projects of [[parent, nested], [nested, parent]]) {
+      expect(matchProject('/repos/team/app/src', projects)?.name).toBe('app');
+      expect(matchProject('/repos/team/app', projects)?.name).toBe('app');
+    }
+  });
+
+  it('prefers exact project matches over ancestor projects', () => {
+    const parent = project({ name: 'parent', workingDirectory: '/repos/team' });
+    const child = project({ name: 'child', workingDirectory: '/repos/team/subproject' });
+    expect(matchProject('/repos/team/subproject', [parent, child])?.name).toBe('child');
+    expect(matchProject('/repos/team', [child, parent])?.name).toBe('parent');
+  });
+
+  it('does not match a sibling prefix when another ancestor can match', () => {
+    const parent = project({ name: 'team', workingDirectory: '/repos/team' });
+    const sibling = project({ name: 'teammate', workingDirectory: '/repos/teammate' });
+    const mismatched = project({ name: 'team-other', workingDirectory: '/repos/team-other' });
+    expect(matchProject('/repos/teammate/app', [parent, sibling])?.name).toBe('teammate');
+    expect(matchProject('/repos/team-other/app', [parent, mismatched])?.name).toBe('team-other');
+  });
+
+  it('skips a more-specific project when RoboRev is not configured', () => {
+    const parent = project({ name: 'team', workingDirectory: '/repos/team' });
+    const disabledChild = project({ name: 'app', workingDirectory: '/repos/team/app', roborevChannelId: undefined });
+    expect(matchProject('/repos/team/app', [disabledChild, parent])?.name).toBe('team');
+  });
+
   it('returns undefined when the project has no roborev channel', () => {
     const result = matchProject('/repos/factory-floor', [
       project({ roborevChannelId: undefined }),

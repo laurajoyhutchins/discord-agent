@@ -7,11 +7,20 @@ export function matchProject(
   projects: Project[],
 ): Project | undefined {
   const repo = repoPath.toLowerCase().replace(/\/+$/, '');
-  return projects.find(project => {
-    if (!project.roborevChannelId) return false;
+  let closest: Project | undefined;
+  let closestLength = -1;
+  for (const project of projects) {
+    if (!project.roborevChannelId) continue;
     const directory = project.workingDirectory.toLowerCase().replace(/\/+$/, '');
-    return repo === directory || repo.startsWith(`${directory}/`);
-  });
+    if (
+      (repo === directory || repo.startsWith(`${directory}/`))
+      && directory.length > closestLength
+    ) {
+      closest = project;
+      closestLength = directory.length;
+    }
+  }
+  return closest;
 }
 
 export function normalizeToNotification(
