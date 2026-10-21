@@ -10,6 +10,7 @@ import {
   type AnyThreadChannel,
   type GuildMember,
   type Message,
+  type MessageComponentInteraction,
 } from 'discord.js';
 import type {
   ApprovalDecision,
@@ -154,7 +155,7 @@ export class DiscordInteractionBroker implements InteractionBroker {
     const deadline = Date.now() + this.timeoutMs;
 
     while (Date.now() < deadline) {
-      const interaction = await message.awaitMessageComponent({
+      const interaction: MessageComponentInteraction | null = await message.awaitMessageComponent({
         ...(freeTextId ? {} : { componentType: ComponentType.StringSelect }),
         time: Math.max(1, deadline - Date.now()),
       }).catch(() => null);
