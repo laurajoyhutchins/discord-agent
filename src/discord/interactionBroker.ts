@@ -10,6 +10,7 @@ import {
   type AnyThreadChannel,
   type GuildMember,
   type Message,
+  type MessageComponentInteraction,
 } from 'discord.js';
 import type {
   ApprovalDecision,
@@ -103,6 +104,11 @@ export class DiscordInteractionBroker implements InteractionBroker {
       .setTimestamp();
 
     if (question.options?.length) {
+      if (question.options.length > 25) {
+        throw new RangeError(
+          `Question ${question.id} has ${question.options.length} choices; Discord supports at most 25 choices per select menu. Refusing to omit answers.`,
+        );
+      }
       return this.requestOptionInput(thread, question, embed);
     }
     return this.requestFreeText(thread, question, embed);
@@ -114,7 +120,7 @@ export class DiscordInteractionBroker implements InteractionBroker {
     embed: EmbedBuilder,
   ): Promise<UserAnswer> {
     const options = question.options ?? [];
-    if (options.length <= 5 && !question.multiple) {
+    if (options.length <= 5 && !question.multiple && !question.allowFreeText) {
       const ids = options.map((_, index) => componentId(thread.id, question.id, `option-${index}`));
       const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
         ...options.map((option, index) => new ButtonBuilder()
@@ -133,16 +139,24 @@ export class DiscordInteractionBroker implements InteractionBroker {
     }
 
     const selectId = componentId(thread.id, question.id, 'select');
-    const visibleOptions = options.slice(0, 25);
-    const encodedValues = visibleOptions.map((_, index) => `option-${index}`);
-    const select = buildSelect(selectId, question, visibleOptions, encodedValues, false);
+    const encodedValues = options.map((_, index) => `option-${index}`);
+    const select = buildSelect(selectId, question, options, encodedValues, false);
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
-    const message = await thread.send({ embeds: [embed], components: [row] });
+    const freeTextId = question.allowFreeText ? componentId(thread.id, question.id, 'free-text') : undefined;
+    const components = freeTextId
+      ? [
+          row,
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(freeTextId).setLabel('Write an answer').setStyle(ButtonStyle.Secondary),
+          ),
+        ]
+      : [row];
+    const message = await thread.send({ embeds: [embed], components });
     const deadline = Date.now() + this.timeoutMs;
 
     while (Date.now() < deadline) {
-      const interaction = await message.awaitMessageComponent({
-        componentType: ComponentType.StringSelect,
+      const interaction: MessageComponentInteraction | null = await message.awaitMessageComponent({
+        ...(freeTextId ? {} : { componentType: ComponentType.StringSelect }),
         time: Math.max(1, deadline - Date.now()),
       }).catch(() => null);
       if (!interaction) break;
@@ -151,19 +165,24 @@ export class DiscordInteractionBroker implements InteractionBroker {
         await interaction.reply({ content: 'You are not authorized.', flags: MessageFlags.Ephemeral }).catch(() => undefined);
         continue;
       }
-      if (interaction.customId !== selectId) continue;
+      if (freeTextId && interaction.customId === freeTextId && interaction.isButton()) {
+        await interaction.deferUpdate().catch(() => undefined);
+        await disableSelect(message, selectId, question, options, encodedValues);
+        return this.requestFreeText(thread, question, embed);
+      }
+      if (interaction.customId !== selectId || !('values' in interaction) || !Array.isArray(interaction.values)) continue;
       await interaction.deferUpdate().catch(() => undefined);
-      await disableSelect(message, selectId, question, visibleOptions, encodedValues);
+      await disableSelect(message, selectId, question, options, encodedValues);
       const values = interaction.values.flatMap(encoded => {
         const index = encodedValues.indexOf(encoded);
-        return index < 0 ? [] : [visibleOptions[index].value];
+        return index < 0 ? [] : [options[index].value];
       });
       return values.length > 0
         ? { skipped: false, values }
         : { skipped: true, values: [] };
     }
 
-    await disableSelect(message, selectId, question, visibleOptions, encodedValues);
+    await disableSelect(message, selectId, question, options, encodedValues);
     return { skipped: true, values: [] };
   }
 
