@@ -58,10 +58,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/laurajoyhutchins/discordagent.git"
+    "url": "git+https://github.com/laurajoyhutchins/discord-agent.git"
   },
   "bugs": {
-    "url": "https://github.com/laurajoyhutchins/discordagent/issues"
+    "url": "https://github.com/laurajoyhutchins/discord-agent/issues"
   },
   "engines": {
     "node": ">=22"
