@@ -170,7 +170,7 @@ export class DiscordInteractionBroker implements InteractionBroker {
         await disableSelect(message, selectId, question, options, encodedValues);
         return this.requestFreeText(thread, question, embed);
       }
-      if (interaction.customId !== selectId || !interaction.isStringSelectMenu()) continue;
+      if (interaction.customId !== selectId || !('values' in interaction) || !Array.isArray(interaction.values)) continue;
       await interaction.deferUpdate().catch(() => undefined);
       await disableSelect(message, selectId, question, options, encodedValues);
       const values = interaction.values.flatMap(encoded => {
