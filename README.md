@@ -68,8 +68,8 @@ Discord messages / commands
 ## Quickstart
 
 ```bash
-git clone https://github.com/laurajoyhutchins/discordagent.git
-cd discordagent
+git clone https://github.com/laurajoyhutchins/discord-agent.git
+cd discord-agent
 npm ci
 cp .env.example .env
 ```
